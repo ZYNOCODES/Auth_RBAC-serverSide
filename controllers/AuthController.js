@@ -38,23 +38,49 @@ const signin = asyncErrorHandler(async (req, res, next) => {
         if (currentTime.isBefore(startTime) || currentTime.isSameOrAfter(endTime)) {
             return next(new CustomError('You are not allowed to login at this time', 400));
         }
+
+        const requestIp = req.ip === '::1' ? '127.0.0.1' : req.ip;
+        if (user.ipAddress != requestIp) {
+            const err = new CustomError('Access denied from this IP address', 403);
+            return next(err);
+        }
     }
   
     const token = JWT.createToken(user.id, user.role);
 
     res.status(200).json({
-        user: user,
+        profile: {
+            id: user.id,
+            username: user.username,
+            role: user.role
+        },
         token: token
     });
 });
 
 const signup = asyncErrorHandler(async (req, res, next) => {
-    const { username, password, role, startTime, endTime } = req.body;
+    const { username, password, role, startTime, endTime, ipAddress } = req.body;
     //check if all fields are provided
-    if (!username || !password || !role || !startTime || !endTime) {
+    if (!username || !password || !role || !startTime || !endTime || !ipAddress) {
         const err = new CustomError('All fields are required', 400);
         return next(err);
     }
+    //check if role is valid
+    if (role.toLowerCase() !== 'admin' && role.toLowerCase() !== 'client') {
+        const err = new CustomError('Invalid role', 400);
+        return next(err);
+    }
+    //check if ip address is valid
+    if (!ipAddress.match(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/)) {
+        const err = new CustomError('Invalid IP address', 400);
+        return next(err);
+    }
+    //check if start and end time are valid
+    if (!startTime.match(/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/) || !endTime.match(/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/)) {
+        const err = new CustomError('Invalid start and end time', 400);
+        return next(err);
+    }
+
     const dbData = readDatabase();
     const users = dbData.users || [];
 
@@ -85,7 +111,8 @@ const signup = asyncErrorHandler(async (req, res, next) => {
             password: hashedPassword.toString(),
             role: role.toString().toLowerCase(),
             startTime: startTime,
-            endTime: endTime
+            endTime: endTime,
+            ipAddress: ipAddress.toString()
         };
     }
     

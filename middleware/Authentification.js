@@ -44,6 +44,12 @@ const requireAuth = asyncErrorHandler(async (req, res, next) => {
         if (currentTime.isBefore(startTime) || currentTime.isSameOrAfter(endTime)) {
             return next(new CustomError('Authentication rejected: user is not active', 401));
         }
+
+        const requestIp = req.ip === '::1' ? '127.0.0.1' : req.ip;
+        if (user.ipAddress != requestIp) {
+            const err = new CustomError('Access denied from this IP address', 403);
+            return next(err);
+        }
     }
 
     req.user = user;
